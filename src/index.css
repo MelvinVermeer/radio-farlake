@@ -1,0 +1,51 @@
+:root {
+  --bg: #fafaf7;
+  --fg: #1d1d1b;
+  --muted: #6b6b66;
+  --line: #e2e1dc;
+  --accent: #1db954;
+  --warn-bg: #fff4d6;
+  --err-bg: #fde2e1;
+  color-scheme: light dark;
+  font: 16px/1.45 system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #161615;
+    --fg: #ecebe6;
+    --muted: #9a9993;
+    --line: #2f2f2c;
+    --warn-bg: #3a3218;
+    --err-bg: #43201f;
+  }
+}
+body { margin: 0; background: var(--bg); color: var(--fg); }
+main { max-width: 720px; margin: 0 auto; padding: 16px; }
+.center { text-align: center; padding-top: 20vh; }
+header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; }
+h1 { font-size: 1.4rem; margin: 0; }
+h2 { font-size: 1.05rem; margin: 24px 0 8px; }
+h3 { font-size: .95rem; margin: 12px 0 4px; }
+nav, .row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+button:hover { border-color: var(--muted); }
+button.active, .now > button { background: var(--accent); border-color: var(--accent); color: #fff; }
+button:disabled { opacity: .5; cursor: default; }
+input { font: inherit; color: inherit; background: transparent; border: 1px solid var(--line); border-radius: 4px; padding: 2px 6px; }
+input[type=number] { width: 5em; }
+.now { margin-top: 16px; padding: 16px; border: 1px solid var(--line); border-radius: 10px; }
+.now .track strong { font-size: 1.25rem; }
+.track { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+.track span, small { color: var(--muted); }
+.queue { padding-left: 1.5em; }
+.queue li { display: flex; gap: 8px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.tuning, .plain { list-style: none; padding: 0; }
+.tuning li { display: flex; gap: 8px; align-items: center; padding: 4px 0; }
+.tuning li span { flex: 1; }
+.tuning b { min-width: 3em; text-align: center; }
+.notice { background: var(--warn-bg); padding: 6px 10px; border-radius: 6px; }
+.error { background: var(--err-bg); padding: 6px 10px; border-radius: 6px; cursor: pointer; }
+.card { border: 1px solid var(--line); border-radius: 10px; padding: 12px; margin-bottom: 12px; }
+table { border-collapse: collapse; margin-top: 8px; }
+td { padding: 2px 8px 2px 0; }
+summary { cursor: pointer; color: var(--muted); }
