@@ -547,13 +547,16 @@ const LABELS: Record<Feature, string> = {
   speechiness: "Gesproken",
   tempo: "Tempo",
   valence: "Vrolijk",
+  popularity: "Populair",
 };
 const format = (k: Feature, v: number) =>
   k === "loudness"
     ? `${Math.round(v)} dB`
     : k === "tempo"
       ? `${Math.round(v)} BPM`
-      : `${Math.round(v * 100)}%`;
+      : k === "popularity"
+        ? `${Math.round(v)}/100`
+        : `${Math.round(v * 100)}%`;
 
 // Recommendations from ReccoBeats as one extra source. One fetch gives a broad pool with audio features;
 // the sliders only filter that pool, so they react instantly.

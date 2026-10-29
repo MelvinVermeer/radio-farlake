@@ -13,8 +13,8 @@ async function get<T>(path: string): Promise<T[]> {
   return (await res.json()).content
 }
 
-type RTrack = { trackTitle: string; durationMs: number; href: string; artists: { name: string; href: string }[] }
-type RFeatures = { href: string } & Features
+type RTrack = { trackTitle: string; durationMs: number; popularity: number; href: string; artists: { name: string; href: string }[] }
+type RFeatures = { href: string } & Omit<Features, 'popularity'>
 
 // A broad pool of recommendations seeded from what the radio plays now (`weights`), with audio features attached.
 // Mood filtering happens later, in matchMood, so moving a slider needs no new requests.
@@ -26,6 +26,7 @@ export async function fetchPool(weights: Record<string, number>, tracks: Record<
     return list[Math.floor(Math.random() * list.length)]
   }
   const pool = new Map<string, Track>()
+  const popularity = new Map<string, number>()
   let lastError: unknown
   for (let b = 0; b < BATCHES; b++) {
     const seeds = Array.from({ length: 5 }, seed).filter(Boolean).map(t => t.uri.split(':').pop())
@@ -40,6 +41,7 @@ export async function fetchPool(weights: Record<string, number>, tracks: Record<
       if (own.has(uri)) continue
       const artists = r.artists.map(a => ({ id: spotifyId(a.href), name: a.name }))
       pool.set(uri, { uri, name: r.trackTitle, durationMs: r.durationMs, artists })
+      popularity.set(uri, r.popularity)
     }
   }
   if (!pool.size) throw lastError ?? new Error('ReccoBeats gaf geen aanbevelingen.')
@@ -49,8 +51,10 @@ export async function fetchPool(weights: Record<string, number>, tracks: Record<
     const chunk = list.slice(i, i + 40)
     const features = await get<RFeatures>(`/audio-features?ids=${chunk.map(t => t.uri.split(':').pop()).join(',')}`)
     for (const f of features) {
-      const t = pool.get(`spotify:track:${spotifyId(f.href)}`)
-      if (t) t.features = Object.fromEntries((Object.keys(FEATURES) as Feature[]).map(k => [k, f[k]])) as Features
+      const uri = `spotify:track:${spotifyId(f.href)}`
+      const t = pool.get(uri)
+      const all: Partial<Features> = { ...f, popularity: popularity.get(uri) }
+      if (t) t.features = Object.fromEntries((Object.keys(FEATURES) as Feature[]).map(k => [k, all[k]])) as Features
     }
   }
   return list
