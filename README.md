@@ -27,6 +27,12 @@ Spotify-app (Development Mode): redirect URI `http://127.0.0.1:5173/callback`. A
   template dat aan of uit gaat, playlists koppelen) berekent de hele wachtrij opnieuw; wat nu speelt blijft.
 - **Regels versoepelen**: is er geen toegestaan nummer, dan vervalt eerst de artiestregel en daarna ook de
   nummerregel. Dat zie je in de app.
+- **Aanbevelingen via ReccoBeats**: Spotify's recommendations en audio-features zijn dicht voor nieuwe apps (sinds
+  november 2024). "Aanbevelingen ophalen" (Radio → Sfeer) haalt ~400 aanbevelingen bij ReccoBeats op, geseed met
+  nummers uit wat nu draait, plus hun negen audio-features (akoestiek, dansbaarheid, energie, instrumentaal, live,
+  luidheid, spraak, tempo, vrolijkheid) en populariteit. Dat wordt één extra bron
+  (`ReccoBeats-aanbevelingen`) met een gewicht zoals elke playlist. De sfeer-schuiven filteren en sorteren die
+  pool in eigen code (`matchMood`, marge per feature in `FEATURES`: 0,2 op de 0–1-schalen, ±12 dB, ±15 BPM, ±20 populariteit), zonder nieuwe requests; Reset wist ze samen met de tuning.
 - **Alleen eigen playlists**: sinds februari 2026 geeft Spotify alleen nog inhoud van playlists die je bezit of
   waaraan je meewerkt. Een gevolgde playlist eerst kopiëren.
 

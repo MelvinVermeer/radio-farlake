@@ -6,6 +6,8 @@ import {
   combinedWeights,
   fillQueue,
   isTriggerActive,
+  matchMood,
+  MOOD_MIN_TRACKS,
   weightedPick,
   type Template,
   type Track,
@@ -79,4 +81,27 @@ test('queue respects song and artist rules, relaxes instead of going silent', ()
   const q2 = fillQueue([], { p: 1 }, tiny, [], 0)
   assert.equal(q2.length, 10)
   assert.ok(q2.some(i => i.relaxed))
+})
+
+test('mood keeps tracks near the targets, closest first, never fewer than the minimum', () => {
+  const base = { energy: 0.5, instrumentalness: 0, liveness: 0.1, loudness: -8, speechiness: 0.05, tempo: 120, valence: 0.5, popularity: 60 }
+  const t = (n: number, danceability: number, acousticness: number): Track => ({
+    uri: `t${n}`, name: `T${n}`, durationMs: 1, artists: [], features: { ...base, danceability, acousticness },
+  })
+  const pool = [
+    ...Array.from({ length: 30 }, (_, i) => t(i, 0.8 + (i % 5) / 100, 0.1)), // dancy, electronic
+    ...Array.from({ length: 30 }, (_, i) => t(100 + i, 0.3, 0.9)), // calm, acoustic
+    { uri: 'nofeat', name: '?', durationMs: 1, artists: [] },
+  ]
+  assert.equal(matchMood(pool, {}).length, pool.length)
+  const dancy = matchMood(pool, { danceability: 0.8 })
+  assert.equal(dancy.length, 30)
+  assert.equal(dancy[0].features!.danceability, 0.8)
+  assert.equal(matchMood(pool, { danceability: 0.8, acousticness: 0.9 }).length, MOOD_MIN_TRACKS) // nothing fits both
+  assert.ok(matchMood(pool, { acousticness: 1 }).every(x => x.features!.acousticness === 0.9))
+  // Each feature has its own tolerance, in its own unit: tempo ±15 BPM, popularity ±20.
+  assert.equal(matchMood(pool, { tempo: 135 }).length, 60)
+  assert.equal(matchMood(pool, { tempo: 140 }).length, MOOD_MIN_TRACKS)
+  assert.equal(matchMood(pool, { popularity: 80 }).length, 60)
+  assert.equal(matchMood(pool, { popularity: 85 }).length, MOOD_MIN_TRACKS)
 })

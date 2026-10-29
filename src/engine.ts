@@ -5,13 +5,31 @@ export type Trigger =
   | { type: 'dateRange'; from: string; to: string } // "MM-DD", repeats every year
 
 export type Template = { id: string; name: string; weights: Record<string, number>; triggers: Trigger[] }
-export type Track = { uri: string; name: string; durationMs: number; artists: { id: string; name: string }[] }
+// ReccoBeats track features: [min, max, tolerance]. A track fits a mood target when it is within the tolerance,
+// in the feature's own unit. Tune a tolerance here if a slider lets too much or too little through.
+export const FEATURES = {
+  acousticness: [0, 1, 0.2],
+  danceability: [0, 1, 0.2],
+  energy: [0, 1, 0.2],
+  instrumentalness: [0, 1, 0.2],
+  liveness: [0, 1, 0.2],
+  loudness: [-60, 0, 12], // dB
+  speechiness: [0, 1, 0.2],
+  tempo: [0, 250, 15], // BPM
+  valence: [0, 1, 0.2],
+  popularity: [0, 100, 20], // from the recommendation itself, not the audio-features endpoint
+} as const
+export type Feature = keyof typeof FEATURES
+export type Features = Record<Feature, number>
+export type Track = { uri: string; name: string; durationMs: number; artists: { id: string; name: string }[]; features?: Features }
+export type Mood = Partial<Features> // a target per feature; absent = no preference
 export type QueueItem = { track: Track; playlistId: string; relaxed?: boolean }
 export type Play = { uri: string; artistIds: string[]; at: number }
 
 export const SONG_GAP = 4 * 60 * 60 * 1000
 export const ARTIST_GAP = 60 * 60 * 1000
 export const QUEUE_SIZE = 10
+export const MOOD_MIN_TRACKS = 20
 
 const toMinutes = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number)
@@ -135,4 +153,16 @@ export function fillQueue(
     at += item.track.durationMs
   }
   return out
+}
+
+// Keep tracks within every target's tolerance, closest first (distance in tolerances, so features compare).
+// Too few matches: take the MOOD_MIN_TRACKS closest anyway, so the source never runs dry.
+export function matchMood(tracks: Track[], mood: Mood): Track[] {
+  const keys = (Object.keys(FEATURES) as Feature[]).filter(k => mood[k] !== undefined)
+  if (!keys.length) return tracks
+  // A feature the track lacks (pool fetched before it was stored) counts as far away.
+  const dist = (t: Track) => Math.max(...keys.map(k => Math.abs((t.features![k] ?? Infinity) - mood[k]!) / FEATURES[k][2]))
+  const sorted = tracks.filter(t => t.features).sort((a, b) => dist(a) - dist(b))
+  const close = sorted.filter(t => dist(t) <= 1)
+  return close.length >= MOOD_MIN_TRACKS ? close : sorted.slice(0, MOOD_MIN_TRACKS)
 }
