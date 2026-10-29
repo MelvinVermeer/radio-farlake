@@ -5,13 +5,17 @@ export type Trigger =
   | { type: 'dateRange'; from: string; to: string } // "MM-DD", repeats every year
 
 export type Template = { id: string; name: string; weights: Record<string, number>; triggers: Trigger[] }
-export type Track = { uri: string; name: string; durationMs: number; artists: { id: string; name: string }[] }
+export type Features = { danceability: number; acousticness: number } // 0..1, from ReccoBeats
+export type Track = { uri: string; name: string; durationMs: number; artists: { id: string; name: string }[]; features?: Features }
+export type Mood = Partial<Features> // a target per feature; absent = no preference
 export type QueueItem = { track: Track; playlistId: string; relaxed?: boolean }
 export type Play = { uri: string; artistIds: string[]; at: number }
 
 export const SONG_GAP = 4 * 60 * 60 * 1000
 export const ARTIST_GAP = 60 * 60 * 1000
 export const QUEUE_SIZE = 10
+export const MOOD_TOLERANCE = 0.2
+export const MOOD_MIN_TRACKS = 20
 
 const toMinutes = (hhmm: string) => {
   const [h, m] = hhmm.split(':').map(Number)
@@ -135,4 +139,15 @@ export function fillQueue(
     at += item.track.durationMs
   }
   return out
+}
+
+// Keep tracks whose features are within MOOD_TOLERANCE of every target, closest first.
+// Too few matches: take the MOOD_MIN_TRACKS closest anyway, so the source never runs dry.
+export function matchMood(tracks: Track[], mood: Mood): Track[] {
+  const keys = (['danceability', 'acousticness'] as const).filter(k => mood[k] !== undefined)
+  if (!keys.length) return tracks
+  const dist = (t: Track) => Math.max(...keys.map(k => Math.abs(t.features![k] - mood[k]!)))
+  const sorted = tracks.filter(t => t.features).sort((a, b) => dist(a) - dist(b))
+  const close = sorted.filter(t => dist(t) <= MOOD_TOLERANCE)
+  return close.length >= MOOD_MIN_TRACKS ? close : sorted.slice(0, MOOD_MIN_TRACKS)
 }

@@ -3,10 +3,14 @@ import {
   activeTemplates,
   combinedWeights,
   fillQueue,
+  matchMood,
   toPlay,
+  type Features,
   type QueueItem,
   type Template,
+  type Track,
 } from "./engine";
+import { fetchPool, RECCO_ID } from "./reccobeats";
 import { createPlayer, initAuth, login, logout, type Player } from "./spotify";
 import { useStore, type SetState, type State } from "./store";
 import { Playlists, Templates } from "./Manage";
@@ -63,8 +67,14 @@ function Radio() {
     [state.templates, state.defaultTemplateId, now],
   );
   const tracks = useMemo(
-    () => Object.fromEntries(state.playlists.map((p) => [p.id, p.tracks])),
-    [state.playlists],
+    () =>
+      Object.fromEntries(
+        state.playlists.map((p) => [
+          p.id,
+          p.id === RECCO_ID ? matchMood(p.tracks, state.mood) : p.tracks,
+        ]),
+      ),
+    [state.playlists, state.mood],
   );
   const playlistIds = state.playlists
     .filter((p) => p.tracks.length)
@@ -412,6 +422,7 @@ function Radio() {
             setState={setState}
             active={active}
             weights={weights}
+            tracks={tracks}
             name={name}
           />
         </>
@@ -452,11 +463,14 @@ function Tuning(props: {
   setState: SetState;
   active: Template[];
   weights: Record<string, number>;
+  tracks: Record<string, Track[]>;
   name: (id: string) => string;
 }) {
-  const { state, setState, active, weights, name } = props;
+  const { state, setState, active, weights, tracks, name } = props;
   const total = Object.values(weights).reduce((s, w) => s + w, 0);
-  const tuned = Object.values(state.tuning).some(Boolean);
+  const tuned =
+    Object.values(state.tuning).some(Boolean) ||
+    Object.keys(state.mood).length > 0;
   const base = (id: string) =>
     active.reduce((s, t) => s + (t.weights[id] ?? 0), 0);
   const nudge = (id: string, delta: number) =>
@@ -473,7 +487,9 @@ function Tuning(props: {
       {tuned && (
         <p className="notice">
           Tuning actief, blijft staan tot je reset.{" "}
-          <button onClick={() => setState((s) => ({ ...s, tuning: {} }))}>
+          <button
+            onClick={() => setState((s) => ({ ...s, tuning: {}, mood: {} }))}
+          >
             Reset
           </button>
         </p>
@@ -501,6 +517,7 @@ function Tuning(props: {
           ))}
         </ul>
       </details>
+      <Mood state={state} setState={setState} weights={weights} tracks={tracks} />
       <details>
         <summary>Waarom speelt dit?</summary>
         <p>Actieve templates: {active.map((t) => t.name).join(" + ")}</p>
@@ -516,6 +533,113 @@ function Tuning(props: {
         </ul>
       </details>
     </section>
+  );
+}
+
+const FEATURES: [keyof Features, string][] = [
+  ["danceability", "Dansbaar"],
+  ["acousticness", "Akoestisch"],
+];
+
+// Recommendations from ReccoBeats as one extra source. One fetch gives a broad pool with audio features;
+// the sliders only filter that pool, so they react instantly.
+function Mood(props: {
+  state: State;
+  setState: SetState;
+  weights: Record<string, number>;
+  tracks: Record<string, Track[]>;
+}) {
+  const { state, setState, weights, tracks } = props;
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+  const pool = state.playlists.find((p) => p.id === RECCO_ID)?.tracks;
+
+  async function refresh() {
+    setBusy(true);
+    setError(undefined);
+    try {
+      const fresh = await fetchPool(weights, tracks);
+      setState((s) => {
+        // First time: give the new source a weight in the default template, else it would never play.
+        const weighted = s.templates.some((t) => t.weights[RECCO_ID] !== undefined);
+        const avg = (w: Record<string, number>) => {
+          const v = Object.values(w).filter(Boolean);
+          return Math.round(v.reduce((a, b) => a + b, 0) / v.length) || 1;
+        };
+        return {
+          ...s,
+          playlists: [
+            ...s.playlists.filter((p) => p.id !== RECCO_ID),
+            { id: RECCO_ID, name: "ReccoBeats-aanbevelingen", snapshot: "", tracks: fresh },
+          ],
+          templates: weighted
+            ? s.templates
+            : s.templates.map((t) =>
+                t.id === s.defaultTemplateId
+                  ? { ...t, weights: { ...t.weights, [RECCO_ID]: avg(t.weights) } }
+                  : t,
+              ),
+        };
+      });
+    } catch (e) {
+      setError(String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const setMood = (k: keyof Features, v: number | undefined) =>
+    setState((s) => {
+      const mood = { ...s.mood };
+      if (v === undefined) delete mood[k];
+      else mood[k] = v;
+      return { ...s, mood };
+    });
+
+  return (
+    <details>
+      <summary>Sfeer (aanbevelingen)</summary>
+      <p>
+        <small>
+          {pool
+            ? `${tracks[RECCO_ID]?.length ?? 0} van ${pool.length} aanbevelingen passen bij de sfeer. `
+            : "Nog geen aanbevelingen. "}
+          Gebaseerd op wat nu draait.
+        </small>{" "}
+        <button disabled={busy} onClick={refresh}>
+          {busy ? "Ophalen…" : pool ? "Nieuwe aanbevelingen" : "Aanbevelingen ophalen"}
+        </button>
+      </p>
+      {error && <p className="error">{error}</p>}
+      <ul className="tuning">
+        {FEATURES.map(([k, label]) => {
+          const v = state.mood[k];
+          return (
+            <li key={k}>
+              <label>
+                <input
+                  type="checkbox"
+                  checked={v !== undefined}
+                  onChange={(e) => setMood(k, e.target.checked ? 0.5 : undefined)}
+                />{" "}
+                {label}
+              </label>
+              <input
+                type="range"
+                min={0}
+                max={1}
+                step={0.05}
+                value={v ?? 0.5}
+                disabled={v === undefined}
+                onChange={(e) => setMood(k, Number(e.target.value))}
+                aria-label={label}
+              />
+              <b>{v === undefined ? "–" : `${Math.round(v * 100)}%`}</b>
+            </li>
+          );
+        })}
+      </ul>
+    </details>
   );
 }
 
