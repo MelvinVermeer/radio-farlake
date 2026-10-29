@@ -3,9 +3,10 @@ import {
   activeTemplates,
   combinedWeights,
   fillQueue,
+  FEATURES,
   matchMood,
   toPlay,
-  type Features,
+  type Feature,
   type QueueItem,
   type Template,
   type Track,
@@ -536,10 +537,23 @@ function Tuning(props: {
   );
 }
 
-const FEATURES: [keyof Features, string][] = [
-  ["danceability", "Dansbaar"],
-  ["acousticness", "Akoestisch"],
-];
+const LABELS: Record<Feature, string> = {
+  acousticness: "Akoestisch",
+  danceability: "Dansbaar",
+  energy: "Energiek",
+  instrumentalness: "Instrumentaal",
+  liveness: "Live",
+  loudness: "Luidheid",
+  speechiness: "Gesproken",
+  tempo: "Tempo",
+  valence: "Vrolijk",
+};
+const format = (k: Feature, v: number) =>
+  k === "loudness"
+    ? `${Math.round(v)} dB`
+    : k === "tempo"
+      ? `${Math.round(v)} BPM`
+      : `${Math.round(v * 100)}%`;
 
 // Recommendations from ReccoBeats as one extra source. One fetch gives a broad pool with audio features;
 // the sliders only filter that pool, so they react instantly.
@@ -588,7 +602,14 @@ function Mood(props: {
     }
   }
 
-  const setMood = (k: keyof Features, v: number | undefined) =>
+  // Switching a feature on starts at the pool's average, so it filters nothing until you move it.
+  const average = (k: Feature) => {
+    const v = (pool ?? []).map((t) => t.features?.[k]).filter((x) => x !== undefined);
+    const [min, max] = FEATURES[k];
+    return v.length ? v.reduce((a, b) => a + b, 0) / v.length : (min + max) / 2;
+  };
+
+  const setMood = (k: Feature, v: number | undefined) =>
     setState((s) => {
       const mood = { ...s.mood };
       if (v === undefined) delete mood[k];
@@ -612,29 +633,31 @@ function Mood(props: {
       </p>
       {error && <p className="error">{error}</p>}
       <ul className="tuning">
-        {FEATURES.map(([k, label]) => {
+        {(Object.keys(FEATURES) as Feature[]).map((k) => {
           const v = state.mood[k];
+          const [min, max] = FEATURES[k];
+          const label = LABELS[k];
           return (
             <li key={k}>
               <label>
                 <input
                   type="checkbox"
                   checked={v !== undefined}
-                  onChange={(e) => setMood(k, e.target.checked ? 0.5 : undefined)}
+                  onChange={(e) => setMood(k, e.target.checked ? average(k) : undefined)}
                 />{" "}
                 {label}
               </label>
               <input
                 type="range"
-                min={0}
-                max={1}
-                step={0.05}
-                value={v ?? 0.5}
+                min={min}
+                max={max}
+                step={(max - min) / 100}
+                value={v ?? average(k)}
                 disabled={v === undefined}
                 onChange={(e) => setMood(k, Number(e.target.value))}
                 aria-label={label}
               />
-              <b>{v === undefined ? "–" : `${Math.round(v * 100)}%`}</b>
+              <b>{v === undefined ? "–" : format(k, v)}</b>
             </li>
           );
         })}

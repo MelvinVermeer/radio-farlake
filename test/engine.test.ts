@@ -84,8 +84,9 @@ test('queue respects song and artist rules, relaxes instead of going silent', ()
 })
 
 test('mood keeps tracks near the targets, closest first, never fewer than the minimum', () => {
+  const base = { energy: 0.5, instrumentalness: 0, liveness: 0.1, loudness: -8, speechiness: 0.05, tempo: 120, valence: 0.5 }
   const t = (n: number, danceability: number, acousticness: number): Track => ({
-    uri: `t${n}`, name: `T${n}`, durationMs: 1, artists: [], features: { danceability, acousticness },
+    uri: `t${n}`, name: `T${n}`, durationMs: 1, artists: [], features: { ...base, danceability, acousticness },
   })
   const pool = [
     ...Array.from({ length: 30 }, (_, i) => t(i, 0.8 + (i % 5) / 100, 0.1)), // dancy, electronic
@@ -98,4 +99,7 @@ test('mood keeps tracks near the targets, closest first, never fewer than the mi
   assert.equal(dancy[0].features!.danceability, 0.8)
   assert.equal(matchMood(pool, { danceability: 0.8, acousticness: 0.9 }).length, MOOD_MIN_TRACKS) // nothing fits both
   assert.ok(matchMood(pool, { acousticness: 1 }).every(x => x.features!.acousticness === 0.9))
+  // Distance is a share of the range: 40 BPM off is 0.16 of 0..250, inside the 0.2 tolerance; 60 BPM is not.
+  assert.equal(matchMood(pool, { tempo: 160 }).length, 60)
+  assert.equal(matchMood(pool, { tempo: 180 }).length, MOOD_MIN_TRACKS)
 })

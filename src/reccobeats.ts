@@ -1,6 +1,6 @@
 // ReccoBeats: recommendations and audio features. Spotify closed both endpoints for apps without extended
 // access from before November 2024. Public API, no key, CORS open; it takes and returns Spotify ids.
-import { weightedPick, type Track } from './engine'
+import { FEATURES, weightedPick, type Feature, type Features, type Track } from './engine'
 
 const BASE = 'https://api.reccobeats.com/v1'
 export const RECCO_ID = 'reccobeats' // pseudo playlist id; weighted like any linked playlist
@@ -14,7 +14,7 @@ async function get<T>(path: string): Promise<T[]> {
 }
 
 type RTrack = { trackTitle: string; durationMs: number; href: string; artists: { name: string; href: string }[] }
-type RFeatures = { href: string; danceability: number; acousticness: number }
+type RFeatures = { href: string } & Features
 
 // A broad pool of recommendations seeded from what the radio plays now (`weights`), with audio features attached.
 // Mood filtering happens later, in matchMood, so moving a slider needs no new requests.
@@ -50,7 +50,7 @@ export async function fetchPool(weights: Record<string, number>, tracks: Record<
     const features = await get<RFeatures>(`/audio-features?ids=${chunk.map(t => t.uri.split(':').pop()).join(',')}`)
     for (const f of features) {
       const t = pool.get(`spotify:track:${spotifyId(f.href)}`)
-      if (t) t.features = { danceability: f.danceability, acousticness: f.acousticness }
+      if (t) t.features = Object.fromEntries((Object.keys(FEATURES) as Feature[]).map(k => [k, f[k]])) as Features
     }
   }
   return list
